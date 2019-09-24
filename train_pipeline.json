@@ -1,0 +1,300 @@
+{
+	"properties": {},
+	"icon": "",
+	"description": "iris - train",
+	"processes": {
+		"artifactproducer1": {
+			"component": "com.sap.ml.artifact.producer",
+			"metadata": {
+				"label": "Artifact Producer",
+				"x": 489.9999990463257,
+				"y": 160,
+				"height": 80,
+				"width": 120,
+				"extensible": true,
+				"config": {
+					"artifactName": "${newArtifactName}",
+					"artifactKind": "model"
+				}
+			}
+		},
+		"python3operator1": {
+			"component": "com.sap.system.python3Operator",
+			"metadata": {
+				"label": "Python3",
+				"x": 285,
+				"y": 92,
+				"height": 80,
+				"width": 120,
+				"extensible": true,
+				"config": {
+					"metadata": {},
+					"script": "import time\nimport csv\nimport tensorflow as tf\nimport numpy as np\nfrom sklearn.preprocessing import MinMaxScaler, OneHotEncoder\nfrom sklearn.model_selection import train_test_split\nfrom io import BytesIO\nimport os\n\nos.environ['TF2_BEHAVIOR'] = '1'  # needed for keras model serializing\n\ndef train_nn(train, categories):\n    ## split data set\n    X_train, X_test, Y_train, Y_test = train_test_split(train, categories, test_size=0.33, random_state=42, stratify=categories)\n    \n    ## max min scalar on parameters\n    X_scaler = MinMaxScaler(feature_range=(0,1))\n     \n    ## Preprocessing the dataset\n    X_train_scaled = X_scaler.fit_transform(X_train)\n    X_test_scaled = X_scaler.fit_transform(X_test)\n     \n    ## One hot encode Y\n    onehot_encoder = OneHotEncoder(sparse=False)\n    Y_train_enc = onehot_encoder.fit_transform(np.array(Y_train).reshape(-1,1))\n    Y_test_enc = onehot_encoder.fit_transform(np.array(Y_test).reshape(-1,1))\n    # api.logger.info(str(Y_test_enc))\n\n    # prepare dataset for training epochs\n    dataset = tf.data.Dataset.from_tensor_slices((X_train_scaled, Y_train_enc))\n    dataset = dataset.shuffle(1000)\n    dataset = dataset.batch(32)\n    dataset = dataset.repeat()\n    dataset_test = tf.data.Dataset.from_tensor_slices((X_test_scaled, Y_test_enc))\n    dataset_test = dataset_test.shuffle(1000)\n    dataset_test = dataset_test.batch(32)\n    dataset_test = dataset_test.repeat()\n    \n    # MLP network setup\n    model = tf.keras.Sequential([tf.keras.layers.Dense(16, input_dim=4), tf.keras.layers.Dense(3, activation=tf.nn.softmax)])\n\n    # opt = tf.train.GradientDescentOptimizer(learning_rate=0.003)\n    sgd = tf.keras.optimizers.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True) \n    model.compile(optimizer=sgd, loss=\"categorical_crossentropy\", metrics=[\"accuracy\"])\n    \n    history = model.fit(dataset, steps_per_epoch=32, epochs=100, verbose=1)\n    # api.logger.info(str(history.history))\n    loss, accuracy = model.evaluate(dataset_test, steps=32)\n    api.logger.info(\"loss:%f\" % (loss))\n    api.logger.info(\"accuracy: %f\" % (accuracy))\n    \n    return model, accuracy\n\ndef process_train_data(data):\n    api.logger.info(data)\n    reader = csv.reader(data.split('\\n'), delimiter=',')\n    train = []\n    categories = []\n    for row in list(reader)[1:]:  # skip header\n        data = row[:4]\n        category = row[4]\n\n        train.append(data)\n        categories.append(category)\n\n    api.logger.info(str(list(categories)))\n\n    return train, categories\n\ndef on_input(data):\n    train, categories = process_train_data(data)\n    model, accuracy =  train_nn(train, categories)\n    # to send metrics to the Submit Metrics operator, create a Python dictionary of key-value pairs\n    metrics_dict = {\"accuracy\": str(accuracy)}\n    # send the metrics to the output port - Submit Metrics operator will use this to persist the metrics \n    api.send(\"metrics\", api.Message(metrics_dict))\n\n    # create & send the model blob to the output port - Artifact Producer operator will use this to persist the model and create an artifact ID\n    model_h5 = BytesIO()\n    model.save(model_h5)\n    api.send(\"modelBlob\", model_h5.getvalue())\n    model_h5.close()\n\napi.set_port_callback(\"input\", on_input)\n"
+				},
+				"additionalinports": [
+					{
+						"name": "input",
+						"type": "string"
+					}
+				],
+				"additionaloutports": [
+					{
+						"name": "metrics",
+						"type": "message"
+					},
+					{
+						"name": "modelBlob",
+						"type": "blob"
+					}
+				]
+			}
+		},
+		"readfile1": {
+			"component": "com.sap.storage.read",
+			"metadata": {
+				"label": "Read File",
+				"x": 17,
+				"y": 92,
+				"height": 80,
+				"width": 120,
+				"config": {
+					"metadata": {},
+					"path": "${inputFilePath}",
+					"batchRead": false,
+					"onlyReadOnChange": true,
+					"service": "SDL"
+				}
+			}
+		},
+		"tostringconverter1": {
+			"component": "com.sap.util.toStringConverter",
+			"metadata": {
+				"label": "ToString Converter",
+				"x": 186,
+				"y": 107,
+				"height": 50,
+				"width": 50,
+				"config": {}
+			}
+		},
+		"graphterminator1": {
+			"component": "com.sap.util.graphTerminator",
+			"metadata": {
+				"label": "Graph Terminator",
+				"x": 1093.9999961853027,
+				"y": 92,
+				"height": 80,
+				"width": 120,
+				"config": {}
+			}
+		},
+		"python3operator2": {
+			"component": "com.sap.system.python3Operator",
+			"metadata": {
+				"label": "Operators Complete",
+				"x": 924.9999961853027,
+				"y": 92,
+				"height": 80,
+				"width": 120,
+				"extensible": true,
+				"config": {
+					"script": "# When both input ports signals arive, the Artifact Producer & Submit Metrics have completed - safe to terminate the graph.\n\ndef on_inputs_ready(metrics_resp, artifact_id):\n    # both input ports have data - previous operators have completed. Send a message as output to stop the graph\n    api.send(\"output\", api.Message(\"Operators complete.\"))\n\napi.set_port_callback([\"metricsResponse\", \"artifactId\"], on_inputs_ready)\n\n"
+				},
+				"additionalinports": [
+					{
+						"name": "metricsResponse",
+						"type": "message"
+					},
+					{
+						"name": "artifactId",
+						"type": "string"
+					}
+				],
+				"additionaloutports": [
+					{
+						"name": "output",
+						"type": "message"
+					}
+				]
+			}
+		},
+		"submitmetrics1": {
+			"component": "com.sap.ml.submitMetrics",
+			"metadata": {
+				"label": "Submit Metrics",
+				"x": 489.4999990463257,
+				"y": 12,
+				"height": 80,
+				"width": 120,
+				"extensible": false,
+				"config": {}
+			}
+		},
+		"tostringconverter2": {
+			"component": "com.sap.util.toStringConverter",
+			"metadata": {
+				"label": "ToString Converter",
+				"x": 809.999997138977,
+				"y": 121.49999976158142,
+				"height": 50,
+				"width": 50,
+				"config": {}
+			}
+		},
+		"tomessageconverter1": {
+			"component": "com.sap.util.toMessageConverter",
+			"metadata": {
+				"label": "ToMessage Converter",
+				"x": 694.9999980926514,
+				"y": 121.49999976158142,
+				"height": 50,
+				"width": 50,
+				"config": {}
+			}
+		}
+	},
+	"groups": [
+		{
+			"name": "group3",
+			"nodes": [
+				"artifactproducer1"
+			],
+			"metadata": {
+				"description": "Artifact Producer"
+			}
+		},
+		{
+			"name": "group1",
+			"nodes": [
+				"python3operator1"
+			],
+			"metadata": {
+				"description": "Group"
+			},
+			"tags": {
+				"iris": ""
+			}
+		}
+	],
+	"connections": [
+		{
+			"metadata": {
+				"points": "240,132 280,132"
+			},
+			"src": {
+				"port": "outstring",
+				"process": "tostringconverter1"
+			},
+			"tgt": {
+				"port": "input",
+				"process": "python3operator1"
+			}
+		},
+		{
+			"metadata": {
+				"points": "409,123 436.99999952316284,123 436.99999952316284,52 484.4999990463257,52"
+			},
+			"src": {
+				"port": "metrics",
+				"process": "python3operator1"
+			},
+			"tgt": {
+				"port": "metrics",
+				"process": "submitmetrics1"
+			}
+		},
+		{
+			"metadata": {
+				"points": "141,141 181,141"
+			},
+			"src": {
+				"port": "outFile",
+				"process": "readfile1"
+			},
+			"tgt": {
+				"port": "inmessage",
+				"process": "tostringconverter1"
+			}
+		},
+		{
+			"metadata": {
+				"points": "613.4999990463257,52 661.9999985694885,52 661.9999985694885,92.50000023841858 891.9999966621399,92.50000023841858 891.9999966621399,123 919.9999961853027,123"
+			},
+			"src": {
+				"port": "response",
+				"process": "submitmetrics1"
+			},
+			"tgt": {
+				"port": "metricsResponse",
+				"process": "python3operator2"
+			}
+		},
+		{
+			"metadata": {
+				"points": "1048.9999961853027,132 1088.9999961853027,132"
+			},
+			"src": {
+				"port": "output",
+				"process": "python3operator2"
+			},
+			"tgt": {
+				"port": "stop",
+				"process": "graphterminator1"
+			}
+		},
+		{
+			"metadata": {
+				"points": "409,141 436.99999952316284,141 436.99999952316284,200 484.9999990463257,200"
+			},
+			"src": {
+				"port": "modelBlob",
+				"process": "python3operator1"
+			},
+			"tgt": {
+				"port": "inArtifact",
+				"process": "artifactproducer1"
+			}
+		},
+		{
+			"metadata": {
+				"points": "863.999997138977,146.49999976158142 891.9999966621399,146.49999976158142 891.9999966621399,141 919.9999961853027,141"
+			},
+			"src": {
+				"port": "outstring",
+				"process": "tostringconverter2"
+			},
+			"tgt": {
+				"port": "artifactId",
+				"process": "python3operator2"
+			}
+		},
+		{
+			"metadata": {
+				"points": "613.9999990463257,200 661.9999985694885,200 661.9999985694885,137.49999976158142 689.9999980926514,137.49999976158142"
+			},
+			"src": {
+				"port": "outArtifact",
+				"process": "artifactproducer1"
+			},
+			"tgt": {
+				"port": "inbody",
+				"process": "tomessageconverter1"
+			}
+		},
+		{
+			"metadata": {
+				"points": "748.9999980926514,146.49999976158142 776.9999976158142,146.49999976158142 776.9999976158142,155.49999976158142 804.999997138977,155.49999976158142"
+			},
+			"src": {
+				"port": "out",
+				"process": "tomessageconverter1"
+			},
+			"tgt": {
+				"port": "inmessage",
+				"process": "tostringconverter2"
+			}
+		}
+	],
+	"inports": {},
+	"outports": {}
+}
