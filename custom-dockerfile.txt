@@ -1,0 +1,4 @@
+# Use an official Python 3.6 image as a parent image
+FROM python:3.6.9-slim-stretch
+
+RUN pip install --no-cache-dir sklearn numpy tensorflow==1.13.2 tornado==5.0.2
