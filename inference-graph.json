@@ -1,0 +1,188 @@
+{
+	"properties": {},
+	"icon": "",
+	"description": "blog tensorflow - inference",
+	"processes": {
+		"artifactconsumer1": {
+			"component": "com.sap.ml.artifact.consumer",
+			"metadata": {
+				"label": "Artifact Consumer",
+				"x": 293.99999809265137,
+				"y": 187.99999952316284,
+				"height": 80,
+				"width": 120,
+				"extensible": true,
+				"config": {}
+			}
+		},
+		"python3operator1": {
+			"component": "com.sap.system.python3Operator",
+			"metadata": {
+				"label": "Python36 - Inference",
+				"x": 514.999997138977,
+				"y": 119.99999952316284,
+				"height": 80,
+				"width": 120,
+				"extensible": true,
+				"config": {
+					"metadata": {},
+					"script": "import json\nimport io\nimport tensorflow as tf\nimport numpy as np\n\n# Global vars to keep track of model status\nmodel = None\nmodel_ready = False\n\n# Validate input data is JSON\ndef is_json(data):\n  try:\n    json_object = json.loads(data)\n  except ValueError as e:\n    return False\n  return True\n\n# When Model Blob reaches the input port\ndef on_model(model_blob):\n    global model\n    global model_ready\n\n    model = model_blob\n    model_ready = True\n    api.logger.info(\"Model Received & Ready\")\n\n# Client POST request received\ndef on_input(msg):\n    error_message = \"\"\n    success = False\n    try:\n        attr = msg.attributes\n        request_id = attr['message.request.id']\n        \n        api.logger.info(\"POST request received from Client - checking if model is ready\")\n        if model_ready:\n            api.logger.info(\"Model Ready\")\n            api.logger.info(\"Received data from client - validating json input\")\n            \n            user_data = msg.body.decode('utf-8')\n            # Received message from client, verify json data is valid\n            if is_json(user_data):\n                api.logger.info(\"Received valid json data from client - ready to use\")\n                \n                # apply your model\n                model_stream = io.BytesIO(model)\n                model_stream.read()\n                model_iris = tf.keras.models.load_model(model_stream)\n                model_stream.close()\n                api.logger.info('load_model')\n\n                # obtain your results\n                feed = json.loads(user_data)\n                iris_data = np.array(feed['data'])\n                api.logger.info(str(iris_data))\n                \n                # check path\n                op_id = attr['openapi.operation_id']\n                api.logger.info('operation_id: ' + op_id )\n                if 'predict_classes' in op_id:\n                    prediction = model_iris.predict_classes(iris_data).tolist()\n                else:\n                    prediction = model_iris.predict(iris_data).tolist()\n                api.logger.info(str(prediction))\n\n                success = True\n            else:\n                api.logger.info(\"Invalid JSON received from client - cannot apply model.\")\n                error_message = \"Invalid JSON provided in request: \" + user_data\n                success = False\n        else:\n            api.logger.info(\"Model has not yet reached the input port - try again.\")\n            error_message = \"Model has not yet reached the input port - try again.\"\n            success = False\n    except Exception as e:\n        api.logger.error(e)\n        error_message = \"An error occurred: \" + str(e)\n    \n    if success:\n        # apply carried out successfully, send a response to the user\n        result = json.dumps({'Results': prediction})\n    else:\n        result = json.dumps({'Error': error_message})\n    \n    request_id = msg.attributes['message.request.id']\n    response = api.Message(attributes={'message.request.id': request_id}, body=result)\n    api.send('output', response)\n\n    \napi.set_port_callback(\"model\", on_model)\napi.set_port_callback(\"input\", on_input)\n"
+				},
+				"additionalinports": [
+					{
+						"name": "input",
+						"type": "message"
+					},
+					{
+						"name": "model",
+						"type": "blob"
+					}
+				],
+				"additionaloutports": [
+					{
+						"name": "output",
+						"type": "message"
+					}
+				]
+			}
+		},
+		"openapiservlow11": {
+			"component": "com.sap.openapi.server",
+			"metadata": {
+				"label": "OpenAPI Servlow",
+				"x": 17,
+				"y": 45.99999976158142,
+				"height": 80,
+				"width": 120,
+				"config": {
+					"basePath": "${deployment}",
+					"timeout": 300000,
+					"websocket": true,
+					"swaggerSpec": "{\n   \"schemes\":[\n      \"http\",\n      \"https\"\n   ],\n   \"swagger\":\"2.0\",\n   \"info\":{\n      \"description\":\"This is an example of using the OpenAPI Servlow to carry out inference with an existing model.\",\n      \"title\":\"OpenAPI demo\",\n      \"termsOfService\":\"http://www.sap.com/vora/terms/\",\n      \"contact\":{\n\n      },\n      \"license\":{\n         \"name\":\"Apache 2.0\",\n         \"url\":\"http://www.apache.org/licenses/LICENSE-2.0.html\"\n      },\n      \"version\":\"1.0.0\"\n   },\n   \"basePath\":\"/$deployment\",\n   \"paths\":{\n      \"/v1/predict\":{\n         \"post\":{\n            \"description\":\"Upload data in json format\",\n            \"consumes\":[\n               \"application/json\"\n            ],\n            \"produces\":[\n               \"application/json\"\n            ],\n            \"summary\":\"probabilities per category\",\n            \"operationId\":\"predict\",\n            \"parameters\":[\n               {\n                  \"type\":\"object\",\n                  \"description\":\"json data\",\n                  \"name\":\"body\",\n                  \"in\":\"body\",\n                  \"required\":true\n               }\n            ],\n            \"responses\":{\n               \"200\":{\n                  \"description\":\"Data received\"\n               },\n               \"500\":{\n                  \"description\":\"Error during upload of json\"\n               }\n            }\n         }\n      },\n      \"/v1/predict_classes\":{\n         \"post\":{\n            \"description\":\"Upload data in json format\",\n            \"consumes\":[\n               \"application/json\"\n            ],\n            \"produces\":[\n               \"application/json\"\n            ],\n            \"summary\":\"predicted category\",\n            \"operationId\":\"predict_classes\",\n            \"parameters\":[\n               {\n                  \"type\":\"object\",\n                  \"description\":\"json data\",\n                  \"name\":\"body\",\n                  \"in\":\"body\",\n                  \"required\":true\n               }\n            ],\n            \"responses\":{\n               \"200\":{\n                  \"description\":\"Data received\"\n               },\n               \"500\":{\n                  \"description\":\"Error during upload of json\"\n               }\n            }\n         }\n      }\n   },\n   \"definitions\":{\n   },\n   \"securityDefinitions\":{\n      \"UserSecurity\":{\n         \"type\":\"basic\"\n      }\n   }\n}",
+					"oneway": false
+				}
+			},
+			"name": "openapiservlow1"
+		},
+		"responseinterceptor11": {
+			"component": "com.sap.util.responseinterceptor",
+			"metadata": {
+				"label": "Response Interceptor",
+				"x": 280.3333317438761,
+				"y": 39.99999952316284,
+				"height": 80,
+				"width": 120,
+				"config": {
+					"maxWait": 300000
+				}
+			},
+			"name": "responseinterceptor1"
+		},
+		"constantgenerator1": {
+			"component": "com.sap.util.constantGenerator",
+			"metadata": {
+				"label": "Submit Artifact Name",
+				"x": 17,
+				"y": 165.99999976158142,
+				"height": 80,
+				"width": 120,
+				"extensible": true,
+				"config": {
+					"content": "${ARTIFACT:MODEL:iris}"
+				}
+			}
+		}
+	},
+	"groups": [
+		{
+			"name": "group2",
+			"nodes": [
+				"artifactconsumer1"
+			],
+			"metadata": {
+				"description": "Artifact Consumer"
+			}
+		},
+		{
+			"name": "group1",
+			"nodes": [
+				"python3operator1"
+			],
+			"metadata": {
+				"description": "Group"
+			},
+			"tags": {
+				"iris": ""
+			}
+		}
+	],
+	"connections": [
+		{
+			"metadata": {
+				"points": "141,85.99999976158142 168.99999952316284,85.99999976158142 168.99999952316284,70.99999952316284 275.3333317438761,70.99999952316284"
+			},
+			"src": {
+				"port": "out",
+				"process": "openapiservlow11"
+			},
+			"tgt": {
+				"port": "in",
+				"process": "responseinterceptor11"
+			}
+		},
+		{
+			"metadata": {
+				"points": "404.3333317438761,79.99999952316284 465.9999976158142,79.99999952316284 465.9999976158142,150.99999952316284 509.99999713897705,150.99999952316284"
+			},
+			"src": {
+				"port": "out",
+				"process": "responseinterceptor11"
+			},
+			"tgt": {
+				"port": "input",
+				"process": "python3operator1"
+			}
+		},
+		{
+			"metadata": {
+				"points": "638.999997138977,159.99999952316284 666.9999966621399,159.99999952316284 666.9999966621399,92 481.9999976158142,92 481.9999976158142,12 184.99999952316284,12 184.99999952316284,88.99999952316284 275.3333317438761,88.99999952316284"
+			},
+			"src": {
+				"port": "output",
+				"process": "python3operator1"
+			},
+			"tgt": {
+				"port": "resp",
+				"process": "responseinterceptor11"
+			}
+		},
+		{
+			"metadata": {
+				"points": "417.99999809265137,227.99999952316284 465.9999976158142,227.99999952316284 465.9999976158142,168.99999952316284 509.99999713897705,168.99999952316284"
+			},
+			"src": {
+				"port": "outArtifact",
+				"process": "artifactconsumer1"
+			},
+			"tgt": {
+				"port": "model",
+				"process": "python3operator1"
+			}
+		},
+		{
+			"metadata": {
+				"points": "141,205.99999976158142 168.99999952316284,205.99999976158142 168.99999952316284,227.99999952316284 260.9999985694885,227.99999952316284 260.9999985694885,236.99999952316284 288.99999809265137,236.99999952316284"
+			},
+			"src": {
+				"port": "out",
+				"process": "constantgenerator1"
+			},
+			"tgt": {
+				"port": "inArtifactID",
+				"process": "artifactconsumer1"
+			}
+		}
+	],
+	"inports": {},
+	"outports": {}
+}
