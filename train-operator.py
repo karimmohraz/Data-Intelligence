@@ -52,7 +52,7 @@ def train_nn(train, categories):
     return model, accuracy
 
 def process_train_data(data):
-    api.logger.info(data)
+    # api.logger.info(data)
     reader = csv.reader(data.split('\n'), delimiter=',')
     train = []
     categories = []
@@ -63,7 +63,7 @@ def process_train_data(data):
         train.append(data)
         categories.append(category)
 
-    api.logger.info(str(list(categories)))
+    # api.logger.info(str(list(categories)))
 
     return train, categories
 
