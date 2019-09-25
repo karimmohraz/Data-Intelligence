@@ -1,0 +1,90 @@
+{
+   "schemes":[
+      "http",
+      "https"
+   ],
+   "swagger":"2.0",
+   "info":{
+      "description":"This is an example of using the OpenAPI Servlow to carry out inference with an existing model.",
+      "title":"OpenAPI demo",
+      "termsOfService":"http://www.sap.com/vora/terms/",
+      "contact":{
+
+      },
+      "license":{
+         "name":"Apache 2.0",
+         "url":"http://www.apache.org/licenses/LICENSE-2.0.html"
+      },
+      "version":"1.0.0"
+   },
+   "basePath":"/$deployment",
+   "paths":{
+      "/v1/predict":{
+         "post":{
+            "description":"Upload data in json format",
+            "consumes":[
+               "application/json"
+            ],
+            "produces":[
+               "application/json"
+            ],
+            "summary":"probabilities per category",
+            "operationId":"predict",
+            "parameters":[
+               {
+                  "type":"object",
+                  "description":"json data",
+                  "name":"body",
+                  "in":"body",
+                  "required":true
+               }
+            ],
+            "responses":{
+               "200":{
+                  "description":"Data received"
+               },
+               "500":{
+                  "description":"Error during upload of json"
+               }
+            }
+         }
+      },
+      "/v1/predict_classes":{
+         "post":{
+            "description":"Upload data in json format",
+            "consumes":[
+               "application/json"
+            ],
+            "produces":[
+               "application/json"
+            ],
+            "summary":"predicted category",
+            "operationId":"predict_classes",
+            "parameters":[
+               {
+                  "type":"object",
+                  "description":"json data",
+                  "name":"body",
+                  "in":"body",
+                  "required":true
+               }
+            ],
+            "responses":{
+               "200":{
+                  "description":"Data received"
+               },
+               "500":{
+                  "description":"Error during upload of json"
+               }
+            }
+         }
+      }
+   },
+   "definitions":{
+   },
+   "securityDefinitions":{
+      "UserSecurity":{
+         "type":"basic"
+      }
+   }
+}
