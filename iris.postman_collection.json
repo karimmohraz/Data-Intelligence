@@ -1,0 +1,67 @@
+{
+	"info": {
+		"name": "iris",
+		"_postman_id": "3c7e0c68-600d-5e02-ee78-26bddf4d5406",
+		"description": "",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "iris-classification",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": [
+						{
+							"key": "password",
+							"value": "<password>",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "<tenant>\\<user>",
+							"type": "string"
+						},
+						{
+							"key": "saveHelperData",
+							"type": "any"
+						},
+						{
+							"key": "showPassword",
+							"value": false,
+							"type": "boolean"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Requested-With",
+						"value": "XMLHttpRequest"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n\t\"data\": [\n\t   [0.57575758, 0.58823529, 0.64912281, 0.63636364],\n       [0.42424242, 0.23529412, 0.54385965, 0.36363636],\n       [0.87878788, 0.35294118, 0.92982456, 0.72727273]\n    ]\n}"
+				},
+				"url": {
+					"raw": "https://<Deployment URL>/v1/predict",
+					"protocol": "https",
+					"host": [
+						"<Deployment URL>"
+					],
+					"path": [
+						"v1",
+						"predict"
+					]
+				},
+				"description": "test iris inference"
+			},
+			"response": []
+		}
+	]
+}
