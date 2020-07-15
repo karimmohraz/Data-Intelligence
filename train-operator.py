@@ -6,6 +6,7 @@ from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split
 from io import BytesIO
 import os
+import h5py
 
 os.environ['TF2_BEHAVIOR'] = '1'  # needed for keras model serializing
 
@@ -76,9 +77,11 @@ def on_input(data):
     api.send("metrics", api.Message(metrics_dict))
 
     # create & send the model blob to the output port - Artifact Producer operator will use this to persist the model and create an artifact ID
-    model_h5 = BytesIO()
-    model.save(model_h5)
-    api.send("modelBlob", model_h5.getvalue())
-    model_h5.close()
+    with h5py.File('trained_model', driver='core', backing_store=False) as model_h5:
+        # save to memory rather than disk
+        model.save(model_h5)
+        model_h5.flush()  # important!
+        blob = model_h5.id.get_file_image()
+        api.send("modelBlob", blob)
 
 api.set_port_callback("input", on_input)
