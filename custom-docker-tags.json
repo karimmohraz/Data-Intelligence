@@ -5,5 +5,6 @@
     "tensorflow": "1.13.2",
     "sklearn": "",
     "numpy": "",
+    "h5py": "",
     "iris": ""
 }
