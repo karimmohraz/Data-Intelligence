@@ -2,6 +2,7 @@ import json
 import io
 import tensorflow as tf
 import numpy as np
+import h5py
 
 # Global vars to keep track of model status
 model = None
@@ -20,9 +21,13 @@ def on_model(model_blob):
     global model
     global model_ready
 
-    model = model_blob
+    # load model
+    f = io.BytesIO(model_blob)
+    model_stream = h5py.File(f, 'r')
+    model = tf.keras.models.load_model(model_stream)
+    f.close()
     model_ready = True
-    api.logger.info("Model Received & Ready")
+    api.logger.info("Model loaded & ready")
 
 # Client POST request received
 def on_input(msg):
@@ -42,14 +47,7 @@ def on_input(msg):
             if is_json(user_data):
                 api.logger.info("Received valid json data from client - ready to use")
                 
-                # apply your model
-                model_stream = io.BytesIO(model)
-                model_stream.read()
-                model_iris = tf.keras.models.load_model(model_stream)
-                model_stream.close()
-                api.logger.info('load_model')
-
-                # obtain your results
+                # obtain your results - input data needs to be scaled [0..1]
                 feed = json.loads(user_data)
                 iris_data = np.array(feed['data'])
                 api.logger.info(str(iris_data))
